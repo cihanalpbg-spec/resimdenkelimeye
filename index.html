@@ -42,6 +42,7 @@
             </div>
             
             <div class="header-actions">
+                <button class="header-action-btn" onclick="showLanguageSelection()" title="Dil Değiştir">🌐</button>
                 <button class="header-action-btn" onclick="openBackupModal()" title="Verileri Yedekle/Yükle">💾</button>
                 <button class="header-action-btn" onclick="openSettingsModal()" title="Uygulama Ayarları">⚙️</button>
             </div>
@@ -76,12 +77,46 @@
                 <!-- Chalk Dust Layer -->
                 <div class="chalk-dust"></div>
 
+                <!-- SECTION 0: LANGUAGE SELECTION -->
+                <section id="sec-lang-select" class="tab-content">
+                    <div class="section-header" style="justify-content: center; text-align: center; margin-bottom: 30px;">
+                        <h2 style="border:none;">Lütfen Çalışmak İstediğiniz Dili Seçin</h2>
+                    </div>
+                    <div class="lang-selector-grid">
+                        <div class="lang-card-option" onclick="selectLanguage('english')">
+                            <span class="lang-flag">🇬🇧</span>
+                            <h3>İngilizce</h3>
+                        </div>
+                        <div class="lang-card-option" onclick="selectLanguage('german')">
+                            <span class="lang-flag">🇩🇪</span>
+                            <h3>Almanca</h3>
+                        </div>
+                        <div class="lang-card-option" onclick="selectLanguage('russian')">
+                            <span class="lang-flag">🇷🇺</span>
+                            <h3>Rusça</h3>
+                        </div>
+                        <div class="lang-card-option" onclick="selectLanguage('japanese')">
+                            <span class="lang-flag">🇯🇵</span>
+                            <h3>Japonca</h3>
+                        </div>
+                        <div class="lang-card-option" onclick="selectLanguage('french')">
+                            <span class="lang-flag">🇫🇷</span>
+                            <h3>Fransızca</h3>
+                        </div>
+                        <div class="lang-card-option" onclick="selectLanguage('spanish')">
+                            <span class="lang-flag">🇪🇸</span>
+                            <h3>İspanyolca</h3>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- SECTION 1: WORD LIST -->
-                <section id="sec-list" class="tab-content active">
+                <section id="sec-list" class="tab-content">
                     <div class="section-header">
                         <h2>Sözlük Kelimeleri</h2>
                         <div class="search-sort-bar">
                             <input type="text" id="search-input" placeholder="Kelime ara... (Chalk style)" oninput="filterWords()">
+                            <button id="btn-toggle-view" class="chalk-btn" onclick="toggleViewMode()">📋 Görünüm: Liste</button>
                             <button id="btn-add-word-modal" class="chalk-btn" onclick="openAddModal()">➕ Yeni Kelime</button>
                         </div>
                     </div>
@@ -91,6 +126,9 @@
                         <!-- Word cards will be loaded here dynamically -->
                         <div class="chalk-loading">Yükleniyor...</div>
                     </div>
+
+                    <!-- Pagination Controls -->
+                    <div id="pagination-controls" class="pagination-container"></div>
                 </section>
 
                 <!-- SECTION 2: IMAGE SCANNER -->
@@ -130,7 +168,10 @@
                         <div class="scan-results-box" id="scan-results" style="display: none;">
                             <h3>Tarama Başarılı! Eklenen Kelimeler:</h3>
                             <ul class="chalk-list" id="scan-words-list"></ul>
-                            <button class="chalk-btn margin-top" onclick="switchTab('list')">Kelimeleri Listede Gör</button>
+                            <div class="preview-actions margin-top">
+                                <button class="chalk-btn border-green" onclick="resetUpload()">Yeni Resim Tara</button>
+                                <button class="chalk-btn" onclick="switchTab('list')">Kelimeleri Listede Gör</button>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -161,7 +202,7 @@
                             <div class="test-menu-card" onclick="startMatching()">
                                 <div class="test-card-icon">🧩</div>
                                 <h3>Kart Eşleştirme</h3>
-                                <p>İngilizce ve Türkçe kelimeleri kartları eşleştirerek yok edin.</p>
+                                <p>Yabancı dildeki ve Türkçe kelimeleri kartları eşleştirerek yok edin.</p>
                             </div>
                             <!-- Test 4 -->
                             <div class="test-menu-card" onclick="startMultipleChoice()">

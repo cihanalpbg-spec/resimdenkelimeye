@@ -1,8 +1,53 @@
 // Application State
 let allWords = [];
+let activeFilteredWords = [];
 let historyRecords = [];
 let selectedImageBase64 = '';
 let activeTab = 'list';
+let viewMode = 'grid'; // 'grid' (Grup) or 'list' (Liste)
+let currentPage = 1;
+const wordsPerPage = 20;
+
+let currentLang = ''; // 'english', 'german', 'russian', 'japanese', 'french', 'spanish'
+
+const LANG_CONFIG = {
+    english: {
+        nameTr: "İngilizce",
+        titleTr: "İngilizceye",
+        locale: "en-US",
+        flag: "🇬🇧"
+    },
+    german: {
+        nameTr: "Almanca",
+        titleTr: "Almancaya",
+        locale: "de-DE",
+        flag: "🇩🇪"
+    },
+    russian: {
+        nameTr: "Rusça",
+        titleTr: "Rusçaya",
+        locale: "ru-RU",
+        flag: "🇷🇺"
+    },
+    japanese: {
+        nameTr: "Japonca",
+        titleTr: "Japoncaya",
+        locale: "ja-JP",
+        flag: "🇯🇵"
+    },
+    french: {
+        nameTr: "Fransızca",
+        titleTr: "Fransızcaya",
+        locale: "fr-FR",
+        flag: "🇫🇷"
+    },
+    spanish: {
+        nameTr: "İspanyolca",
+        titleTr: "İspanyolcaya",
+        locale: "es-ES",
+        flag: "🇪🇸"
+    }
+};
 
 // Fetch voices once loaded
 if ('speechSynthesis' in window) {
@@ -11,8 +56,20 @@ if ('speechSynthesis' in window) {
 
 // On Page Load
 document.addEventListener('DOMContentLoaded', () => {
-    fetchWords();
-    fetchHistory();
+    // Load view mode from local storage if set
+    const savedViewMode = localStorage.getItem('resimden_ingilizceye_viewmode');
+    if (savedViewMode) {
+        viewMode = savedViewMode;
+    }
+    updateViewToggleButtonText();
+
+    // Check language selection
+    const savedLang = localStorage.getItem('resimden_ingilizceye_currentlang');
+    if (savedLang && LANG_CONFIG[savedLang]) {
+        selectLanguage(savedLang);
+    } else {
+        showLanguageSelection();
+    }
     
     // Close dropdowns on clicking elsewhere
     document.addEventListener('click', () => {
@@ -26,6 +83,45 @@ document.addEventListener('DOMContentLoaded', () => {
         speechSynthesis.onvoiceschanged = () => {};
     }
 });
+
+// ----------------------------------------------------
+// MULTI-LANGUAGE NAVIGATION LOGIC
+// ----------------------------------------------------
+function showLanguageSelection() {
+    currentLang = '';
+    localStorage.removeItem('resimden_ingilizceye_currentlang');
+    
+    // Update App Title
+    document.getElementById('app-title').innerText = "Resimden Kelimeye";
+    
+    // Hide App Nav
+    const nav = document.querySelector('.app-nav');
+    if (nav) nav.style.display = 'none';
+    
+    // Switch to language selector tab
+    document.querySelectorAll('.tab-content').forEach(section => {
+        section.classList.remove('active');
+    });
+    const langSec = document.getElementById('sec-lang-select');
+    if (langSec) langSec.classList.add('active');
+}
+
+function selectLanguage(lang) {
+    if (!LANG_CONFIG[lang]) return;
+    
+    currentLang = lang;
+    localStorage.setItem('resimden_ingilizceye_currentlang', lang);
+    
+    // Update App Title dynamically
+    document.getElementById('app-title').innerText = "Resimden " + LANG_CONFIG[lang].titleTr;
+    
+    // Show App Nav
+    const nav = document.querySelector('.app-nav');
+    if (nav) nav.style.display = 'flex';
+    
+    // Load active tab
+    switchTab('list');
+}
 
 // ----------------------------------------------------
 // TAB SYSTEM
@@ -61,14 +157,16 @@ function switchTab(tabId) {
 // LOCAL PERSISTENT STORAGE
 // ----------------------------------------------------
 function fetchWords() {
+    if (!currentLang) return;
     try {
-        const localData = localStorage.getItem('resimden_ingilizceye_words');
+        const localData = localStorage.getItem(`resimden_ingilizceye_words_${currentLang}`);
         allWords = localData ? JSON.parse(localData) : [];
         
-        // Sort words alphabetically by English word (case-insensitive)
+        // Sort words alphabetically by vocabulary word
         allWords.sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }));
         
-        renderWords(allWords);
+        activeFilteredWords = [...allWords];
+        renderWords(activeFilteredWords);
     } catch (error) {
         console.error("Kelime listesi yüklenirken hata oluştu:", error);
         document.getElementById('words-container').innerHTML = 
@@ -77,8 +175,9 @@ function fetchWords() {
 }
 
 function fetchHistory() {
+    if (!currentLang) return;
     try {
-        const localData = localStorage.getItem('resimden_ingilizceye_history');
+        const localData = localStorage.getItem(`resimden_ingilizceye_history_${currentLang}`);
         historyRecords = localData ? JSON.parse(localData) : [];
         
         // Sort history by date descending (newest first)
@@ -94,6 +193,8 @@ function fetchHistory() {
 
 function saveWord(event) {
     event.preventDefault();
+    if (!currentLang) return;
+    
     const id = document.getElementById('form-word-id').value;
     const word = document.getElementById('form-word').value.trim();
     const pronunciation = document.getElementById('form-pronunciation').value.trim();
@@ -139,20 +240,22 @@ function saveWord(event) {
     }
 
     // Save to localStorage
-    localStorage.setItem('resimden_ingilizceye_words', JSON.stringify(allWords));
+    localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
     closeWordModal();
     fetchWords();
 }
 
 function deleteWord(id) {
+    if (!currentLang) return;
     if (!confirm('Bu kelimeyi silmek istediğinize emin misiniz?')) return;
     
     allWords = allWords.filter(w => w.id !== id);
-    localStorage.setItem('resimden_ingilizceye_words', JSON.stringify(allWords));
+    localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
     fetchWords();
 }
 
 function logStudySession(testName, score, wordsStudied) {
+    if (!currentLang) return;
     try {
         const record = {
             id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
@@ -162,7 +265,7 @@ function logStudySession(testName, score, wordsStudied) {
             wordsStudied: wordsStudied || []
         };
         historyRecords.push(record);
-        localStorage.setItem('resimden_ingilizceye_history', JSON.stringify(historyRecords));
+        localStorage.setItem(`resimden_ingilizceye_history_${currentLang}`, JSON.stringify(historyRecords));
     } catch (error) {
         console.error('Çalışma geçmişi kaydedilemedi:', error);
     }
@@ -197,6 +300,7 @@ function closeBackupModal() {
 }
 
 function exportBackup() {
+    if (!currentLang) return;
     const data = {
         words: allWords,
         history: historyRecords
@@ -204,7 +308,7 @@ function exportBackup() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `resimden_ingilizceye_yedek_${new Date().toISOString().slice(0, 10)}.json`);
+    downloadAnchor.setAttribute("download", `resimden_${currentLang}_yedek_${new Date().toISOString().slice(0, 10)}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -215,6 +319,7 @@ function triggerBackupFile() {
 }
 
 function importBackup(event) {
+    if (!currentLang) return;
     const file = event.target.files[0];
     if (!file) return;
 
@@ -230,8 +335,8 @@ function importBackup(event) {
                 allWords = imported.words;
                 historyRecords = imported.history || [];
                 
-                localStorage.setItem('resimden_ingilizceye_words', JSON.stringify(allWords));
-                localStorage.setItem('resimden_ingilizceye_history', JSON.stringify(historyRecords));
+                localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
+                localStorage.setItem(`resimden_ingilizceye_history_${currentLang}`, JSON.stringify(historyRecords));
                 
                 alert('Yedekten yükleme başarıyla tamamlandı!');
                 closeBackupModal();
@@ -250,12 +355,34 @@ function importBackup(event) {
 // ----------------------------------------------------
 function renderWords(words) {
     const container = document.getElementById('words-container');
+    const paginationContainer = document.getElementById('pagination-controls');
+    
     if (!words || words.length === 0) {
         container.innerHTML = `<div class="chalk-loading">Henüz kelime eklenmemiş. Üstteki "Resim Yükle" veya "+ Yeni Kelime" butonuna basarak ekleyin!</div>`;
+        paginationContainer.innerHTML = '';
         return;
     }
 
-    container.innerHTML = words.map(item => {
+    // Pagination calculations
+    const totalWords = words.length;
+    const totalPages = Math.ceil(totalWords / wordsPerPage);
+    
+    if (currentPage > totalPages) {
+        currentPage = Math.max(1, totalPages);
+    }
+    
+    const startIndex = (currentPage - 1) * wordsPerPage;
+    const pagedWords = words.slice(startIndex, startIndex + wordsPerPage);
+
+    // Apply CSS class based on viewMode
+    if (viewMode === 'list') {
+        container.className = 'words-list';
+    } else {
+        container.className = 'words-grid';
+    }
+
+    // Render Words List
+    container.innerHTML = pagedWords.map(item => {
         return `
             <div class="word-card" id="word-${item.id}">
                 <div class="card-header-row">
@@ -280,17 +407,50 @@ function renderWords(words) {
             </div>
         `;
     }).join('');
+
+    // Render Pagination Controls
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+    } else {
+        paginationContainer.innerHTML = `
+            <button class="chalk-btn" ${currentPage === 1 ? 'disabled style="opacity:0.3; pointer-events:none;"' : ''} onclick="changePage(-1)">&lt;</button>
+            <span class="page-info">Sayfa ${currentPage} / ${totalPages}</span>
+            <button class="chalk-btn" ${currentPage === totalPages ? 'disabled style="opacity:0.3; pointer-events:none;"' : ''} onclick="changePage(1)">&gt;</button>
+        `;
+    }
+}
+
+function changePage(direction) {
+    currentPage += direction;
+    renderWords(activeFilteredWords);
+    // Scroll chalkboard to top
+    document.getElementById('main-chalkboard').scrollTop = 0;
+}
+
+function toggleViewMode() {
+    viewMode = viewMode === 'grid' ? 'list' : 'grid';
+    localStorage.setItem('resimden_ingilizceye_viewmode', viewMode);
+    updateViewToggleButtonText();
+    renderWords(activeFilteredWords);
+}
+
+function updateViewToggleButtonText() {
+    const btn = document.getElementById('btn-toggle-view');
+    if (btn) {
+        btn.innerText = viewMode === 'grid' ? '📋 Görünüm: Liste' : '🎴 Görünüm: Grup';
+    }
 }
 
 function filterWords() {
     const query = document.getElementById('search-input').value.toLowerCase();
-    const filtered = allWords.filter(item => {
+    activeFilteredWords = allWords.filter(item => {
         return item.word.toLowerCase().includes(query) || 
                item.meaning.toLowerCase().includes(query) ||
                (item.pronunciation && item.pronunciation.toLowerCase().includes(query)) ||
                (item.technique && item.technique.toLowerCase().includes(query));
     });
-    renderWords(filtered);
+    currentPage = 1; // Reset to page 1 on filter
+    renderWords(activeFilteredWords);
 }
 
 // Toggle edit / delete menus on card
@@ -313,6 +473,13 @@ function toggleDropdown(event, wordId) {
 function openAddModal() {
     document.getElementById('form-word-id').value = '';
     document.getElementById('word-form').reset();
+    
+    // Update label dynamically based on language
+    const label = document.querySelector('label[for="form-word"]');
+    if (label && currentLang) {
+        label.innerText = `${LANG_CONFIG[currentLang].nameTr} Kelime (Kırmızı):`;
+    }
+    
     document.getElementById('modal-title').innerText = 'Yeni Kelime Ekle';
     document.getElementById('word-modal').style.display = 'flex';
 }
@@ -327,6 +494,12 @@ function openEditModal(id) {
     document.getElementById('form-meaning').value = wordItem.meaning;
     document.getElementById('form-technique').value = wordItem.technique || '';
     
+    // Update label dynamically based on language
+    const label = document.querySelector('label[for="form-word"]');
+    if (label && currentLang) {
+        label.innerText = `${LANG_CONFIG[currentLang].nameTr} Kelime (Kırmızı):`;
+    }
+    
     document.getElementById('modal-title').innerText = 'Kelime Düzenle';
     document.getElementById('word-modal').style.display = 'flex';
 }
@@ -339,17 +512,19 @@ function closeWordModal() {
 // AUDIO PRONUNCIATION ENGINE (SPEECH SYNTHESIS)
 // ----------------------------------------------------
 function speakWord(text) {
+    if (!currentLang) return;
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel(); // Stop current speaking
         
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
+        const langCode = LANG_CONFIG[currentLang].locale;
+        utterance.lang = langCode;
         
-        // Find English voice
+        // Find language specific voice
         const voices = window.speechSynthesis.getVoices();
-        const enVoice = voices.find(v => v.lang.startsWith('en'));
-        if (enVoice) {
-            utterance.voice = enVoice;
+        const matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith(langCode.slice(0, 2).toLowerCase()));
+        if (matchedVoice) {
+            utterance.voice = matchedVoice;
         }
         
         window.speechSynthesis.speak(utterance);
@@ -431,32 +606,34 @@ function resetUpload() {
 }
 
 async function processImageOCR() {
-    if (!selectedImageBase64) return;
+    if (!selectedImageBase64 || !currentLang) return;
 
     // Show loading eraser animation
     document.getElementById('loading-overlay').style.display = 'flex';
     document.getElementById('preview-area').style.display = 'none';
 
     const localApiKey = localStorage.getItem('resimden_ingilizceye_apikey');
+    const targetLangName = LANG_CONFIG[currentLang].nameTr;
     
     try {
         let extractedWords = [];
 
         if (localApiKey) {
             // Client-Side Direct call to Gemini API using custom api key
-            console.log("Calling Gemini API directly from browser...");
+            console.log(`Calling Gemini API directly from browser for ${targetLangName}...`);
             const match = selectedImageBase64.match(/^data:([^;]+);base64,(.+)$/);
             const mimeType = match ? match[1] : 'image/jpeg';
             const base64Data = match ? match[2] : selectedImageBase64;
 
             const systemInstruction = 
-              `Extract all vocabulary items from this English learning textbook image. Each vocabulary entry contains:
-1. English Word (Kelime) -> key 'word' (example: 'Abandon')
+              `Extract all vocabulary items from this ${targetLangName} learning textbook image. Each vocabulary entry contains:
+1. ${targetLangName} Word (Kelime) -> key 'word' (example: 'Abandon')
 2. Turkish Pronunciation (Okunuşu) -> key 'pronunciation' (example: 'ıbandın')
 3. Turkish Meaning (Türkçe Anlamı) -> key 'meaning' (example: 'Terk etmek')
 4. Memory Technique (Hafıza Tekniği) -> key 'technique' (example: 'Topa çok abandığın halde kaleci kalesini terk etmedi.')
 
 For each vocabulary item, parse these 4 parts exactly.
+If "pronunciation" (okunuş) or "technique" (hafıza tekniği) are not present in the text, leave them as empty strings ("") in the JSON object instead of skipping the word. Always extract the word (Kelime) and meaning (Türkçe Anlamı).
 Return the output ONLY as a valid JSON array of objects.
 Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Return pure JSON.`;
 
@@ -522,11 +699,14 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
 
         } else {
             // Vercel Serverless Function Call
-            console.log("Calling serverless api/upload endpoint...");
+            console.log(`Calling serverless api/upload endpoint for ${targetLangName}...`);
             const response = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: selectedImageBase64 })
+                body: JSON.stringify({ 
+                    image: selectedImageBase64,
+                    language: targetLangName
+                })
             });
 
             const responseText = await response.text();
@@ -576,7 +756,7 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
             });
 
             // Write back to localStorage
-            localStorage.setItem('resimden_ingilizceye_words', JSON.stringify(allWords));
+            localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
 
             // Render Scan Results List
             const listContainer = document.getElementById('scan-words-list');
@@ -697,14 +877,15 @@ function startHangman() {
     
     showGameArena();
     const arena = document.getElementById('game-arena');
+    const targetLang = LANG_CONFIG[currentLang].nameTr;
     
     arena.innerHTML = `
         <h2 class="game-title">Adam Asmaca</h2>
         <div class="game-setup">
             <p>Oyun modunu seçin:</p>
             <div class="game-setup-row">
-                <button class="chalk-btn border-green" onclick="initHangman('en_to_tr')">İngilizce Sor / Türkçe Anlamı İpucu</button>
-                <button class="chalk-btn border-green" onclick="initHangman('tr_to_en')">Türkçe Sor / İngilizce İpucu</button>
+                <button class="chalk-btn border-green" onclick="initHangman('en_to_tr')">${targetLang} Sor / Türkçe Anlamı İpucu</button>
+                <button class="chalk-btn border-green" onclick="initHangman('tr_to_en')">Türkçe Sor / ${targetLang} İpucu</button>
             </div>
         </div>
     `;
@@ -757,12 +938,13 @@ function renderHangmanUI() {
     // Clue and text display
     let clueLabel = '';
     let clueText = '';
+    const targetLang = LANG_CONFIG[currentLang].nameTr;
     
     if (hangmanState.mode === 'en_to_tr') {
         clueLabel = 'Türkçe Anlamı (İpucu):';
         clueText = hangmanState.wordObj.meaning;
     } else {
-        clueLabel = 'İngilizce Kelime (İpucu):';
+        clueLabel = `${targetLang} Kelime (İpucu):`;
         clueText = hangmanState.wordObj.word;
     }
     
@@ -955,14 +1137,15 @@ function startFillBlanks() {
     
     showGameArena();
     const arena = document.getElementById('game-arena');
+    const targetLang = LANG_CONFIG[currentLang].nameTr;
     
     arena.innerHTML = `
         <h2 class="game-title">Boşluk Doldurma</h2>
         <div class="game-setup">
             <p>Soru türünü seçin:</p>
             <div class="game-setup-row">
-                <button class="chalk-btn border-green" onclick="initFillBlanks('en_to_tr')">İngilizce Sor / Türkçe Anlamını Yaz</button>
-                <button class="chalk-btn border-green" onclick="initFillBlanks('tr_to_en')">Türkçe Sor / İngilizce Kelimeyi Yaz</button>
+                <button class="chalk-btn border-green" onclick="initFillBlanks('en_to_tr')">${targetLang} Sor / Türkçe Anlamını Yaz</button>
+                <button class="chalk-btn border-green" onclick="initFillBlanks('tr_to_en')">Türkçe Sor / ${targetLang} Kelimeyi Yaz</button>
             </div>
         </div>
     `;
@@ -1138,6 +1321,7 @@ function initMatching() {
 
 function renderMatchingUI() {
     const arena = document.getElementById('game-arena');
+    const targetLang = LANG_CONFIG[currentLang].nameTr;
     
     const cardsHTML = matchState.cards.map((card, idx) => {
         return `
@@ -1150,7 +1334,7 @@ function renderMatchingUI() {
     arena.innerHTML = `
         <h2 class="game-title">Kart Eşleştirme</h2>
         <div class="test-play-board">
-            <p>Aynı anlamdaki İngilizce ve Türkçe kartları eşleştirin:</p>
+            <p>Aynı anlamdaki ${targetLang} ve Türkçe kartları eşleştirin:</p>
             <div class="matching-board">
                 ${cardsHTML}
             </div>
@@ -1236,14 +1420,15 @@ function startMultipleChoice() {
     
     showGameArena();
     const arena = document.getElementById('game-arena');
+    const targetLang = LANG_CONFIG[currentLang].nameTr;
     
     arena.innerHTML = `
         <h2 class="game-title">5 Şıklı Test</h2>
         <div class="game-setup">
             <p>Soru ve Şık Türünü Seçin:</p>
             <div class="game-setup-row">
-                <button class="chalk-btn border-green" onclick="initMultipleChoice('en_to_tr')">İngilizce Sor / Türkçe Şıklar</button>
-                <button class="chalk-btn border-green" onclick="initMultipleChoice('tr_to_en')">Türkçe Sor / İngilizce Şıklar</button>
+                <button class="chalk-btn border-green" onclick="initMultipleChoice('en_to_tr')">${targetLang} Sor / Türkçe Şıklar</button>
+                <button class="chalk-btn border-green" onclick="initMultipleChoice('tr_to_en')">Türkçe Sor / ${targetLang} Şıklar</button>
             </div>
         </div>
     `;

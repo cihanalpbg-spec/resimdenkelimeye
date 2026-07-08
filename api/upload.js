@@ -16,10 +16,12 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Metod izin verilmedi.' });
   }
 
-  const { image } = req.body;
+  const { image, language } = req.body;
   if (!image) {
     return res.status(400).json({ error: 'Resim verisi eksik.' });
   }
+
+  const targetLanguage = language || 'İngilizce (English)';
 
   // Retrieve Gemini API Key from Vercel Environment Variables
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -40,13 +42,14 @@ module.exports = async (req, res) => {
   }
 
   const systemInstruction = 
-    `Extract all vocabulary items from this English learning textbook image. Each vocabulary entry contains:
-1. English Word (Kelime) -> key 'word' (example: 'Abandon')
+    `Extract all vocabulary items from this ${targetLanguage} learning textbook image. Each vocabulary entry contains:
+1. ${targetLanguage} Word (Kelime) -> key 'word' (example: 'Abandon')
 2. Turkish Pronunciation (Okunuşu) -> key 'pronunciation' (example: 'ıbandın')
 3. Turkish Meaning (Türkçe Anlamı) -> key 'meaning' (example: 'Terk etmek')
 4. Memory Technique (Hafıza Tekniği) -> key 'technique' (example: 'Topa çok abandığın halde kaleci kalesini terk etmedi.')
 
 For each vocabulary item, parse these 4 parts exactly.
+If "pronunciation" (okunuş) or "technique" (hafıza tekniği) are not present in the text, leave them as empty strings ("") in the JSON object instead of skipping the word. Always extract the word (Kelime) and meaning (Türkçe Anlamı).
 Return the output ONLY as a valid JSON array of objects.
 Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Return pure JSON.`;
 
