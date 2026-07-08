@@ -365,19 +365,59 @@ function triggerFileInput() {
     document.getElementById('file-input').click();
 }
 
+function compressImage(base64Str, maxWidth = 1600, maxHeight = 1600, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth || height > maxHeight) {
+                if (width > height) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                } else {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = (err) => reject(err);
+    });
+}
+
 function handleImageSelection(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
-        selectedImageBase64 = e.target.result;
-        
-        // Show preview
-        document.getElementById('image-preview').src = selectedImageBase64;
-        document.getElementById('dropzone').style.display = 'none';
-        document.getElementById('preview-area').style.display = 'flex';
-        document.getElementById('scan-results').style.display = 'none';
+    reader.onload = async function(e) {
+        try {
+            // Compress the image (reduces mega-pixel camera snaps from 8MB to ~200KB)
+            selectedImageBase64 = await compressImage(e.target.result, 1600, 1600, 0.75);
+            
+            // Show preview
+            document.getElementById('image-preview').src = selectedImageBase64;
+            document.getElementById('dropzone').style.display = 'none';
+            document.getElementById('preview-area').style.display = 'flex';
+            document.getElementById('scan-results').style.display = 'none';
+        } catch (compressErr) {
+            console.error("Compression failed, using raw image:", compressErr);
+            selectedImageBase64 = e.target.result;
+            document.getElementById('image-preview').src = selectedImageBase64;
+            document.getElementById('dropzone').style.display = 'none';
+            document.getElementById('preview-area').style.display = 'flex';
+            document.getElementById('scan-results').style.display = 'none';
+        }
     };
     reader.readAsDataURL(file);
 }
@@ -452,7 +492,14 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
                   body: JSON.stringify(requestBody)
                 });
 
-                const responseJson = await response.json();
+                const responseText = await response.text();
+                let responseJson;
+                try {
+                    responseJson = JSON.parse(responseText);
+                } catch (pe) {
+                    throw new Error(responseText.slice(0, 100) || `HTTP ${response.status}`);
+                }
+
                 if (!response.ok) {
                   throw new Error(responseJson.error?.message || `HTTP ${response.status}`);
                 }
@@ -482,7 +529,14 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
                 body: JSON.stringify({ image: selectedImageBase64 })
             });
 
-            const data = await response.json();
+            const responseText = await response.text();
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (pe) {
+                throw new Error(responseText.slice(0, 120) || `HTTP ${response.status}`);
+            }
+
             if (!response.ok) {
                 throw new Error(data.error || 'Serverless OCR işlemi başarısız.');
             }
