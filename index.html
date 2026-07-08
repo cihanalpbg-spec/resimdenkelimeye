@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Resimden İngilizceye - Kelime Tahtası</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Patrick+Hand&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#5c3a21">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Resim İngilizce">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered', reg))
+                    .catch(err => console.log('Service Worker registration failed', err));
+            });
+        }
+    </script>
+</head>
+<body>
+
+    <!-- App Shell -->
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <img src="assets/logo.png" id="img-logo" class="app-logo" alt="Kurt Logosu">
+                <h1 id="app-title">Resimden İngilizceye</h1>
+            </div>
+            
+            <div class="header-actions">
+                <button class="header-action-btn" onclick="openBackupModal()" title="Verileri Yedekle/Yükle">💾</button>
+                <button class="header-action-btn" onclick="openSettingsModal()" title="Uygulama Ayarları">⚙️</button>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="app-nav">
+                <button id="nav-list" class="nav-btn active" onclick="switchTab('list')">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-text">Kelimeler</span>
+                </button>
+                <button id="nav-upload" class="nav-btn" onclick="switchTab('upload')">
+                    <span class="nav-icon">📷</span>
+                    <span class="nav-text">Resim Yükle</span>
+                </button>
+                <button id="nav-test" class="nav-btn" onclick="switchTab('test')">
+                    <span class="nav-icon">🎮</span>
+                    <span class="nav-text">Test Merkezi</span>
+                </button>
+                <button id="nav-archive" class="nav-btn" onclick="switchTab('archive')">
+                    <span class="nav-icon">📜</span>
+                    <span class="nav-text">Arşiv</span>
+                </button>
+            </nav>
+        </header>
+
+        <!-- Main Content Area (Green Chalkboard) -->
+        <main class="chalkboard-frame">
+            <div class="chalkboard" id="main-chalkboard">
+                <!-- Watermark Background -->
+                <div class="chalkboard-watermark"></div>
+                
+                <!-- Chalk Dust Layer -->
+                <div class="chalk-dust"></div>
+
+                <!-- SECTION 1: WORD LIST -->
+                <section id="sec-list" class="tab-content active">
+                    <div class="section-header">
+                        <h2>Sözlük Kelimeleri</h2>
+                        <div class="search-sort-bar">
+                            <input type="text" id="search-input" placeholder="Kelime ara... (Chalk style)" oninput="filterWords()">
+                            <button id="btn-add-word-modal" class="chalk-btn" onclick="openAddModal()">➕ Yeni Kelime</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Words Chalk Grid -->
+                    <div class="words-grid" id="words-container">
+                        <!-- Word cards will be loaded here dynamically -->
+                        <div class="chalk-loading">Yükleniyor...</div>
+                    </div>
+                </section>
+
+                <!-- SECTION 2: IMAGE SCANNER -->
+                <section id="sec-upload" class="tab-content">
+                    <div class="section-header">
+                        <h2>Textbook Sayfası Tara (Gemini OCR)</h2>
+                    </div>
+                    <div class="scanner-container">
+                        <p class="scan-instructions">
+                            Kitap sayfasının fotoğrafını çekin veya galeriden yükleyin. Sistem kelimeleri, okunuşları ve hafıza tekniklerini otomatik olarak çıkaracaktır.
+                        </p>
+                        
+                        <!-- Upload Box -->
+                        <div class="upload-dropzone" id="dropzone" onclick="triggerFileInput()">
+                            <div class="upload-icon">📸</div>
+                            <span class="upload-main-text">Fotoğraf Çek / Dosya Seç</span>
+                            <span class="upload-sub-text">PNG, JPG formatlarında kitap sayfaları</span>
+                            <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleImageSelection(event)" style="display: none;">
+                        </div>
+
+                        <!-- Image Preview Area -->
+                        <div class="preview-container" id="preview-area" style="display: none;">
+                            <img id="image-preview" src="" alt="Seçilen Resim">
+                            <div class="preview-actions">
+                                <button id="btn-cancel-scan" class="chalk-btn border-red" onclick="resetUpload()">Vazgeç</button>
+                                <button id="btn-process-scan" class="chalk-btn border-green" onclick="processImageOCR()">Resmi Çözümle ve Ekle</button>
+                            </div>
+                        </div>
+
+                        <!-- Parsing Loading Overlay -->
+                        <div class="eraser-loading-overlay" id="loading-overlay" style="display: none;">
+                            <div class="eraser-tool">🧹</div>
+                            <div class="loading-message">Kara tahta temizleniyor ve kelimeler yazılıyor...</div>
+                        </div>
+                        
+                        <!-- Extracted Words Feed -->
+                        <div class="scan-results-box" id="scan-results" style="display: none;">
+                            <h3>Tarama Başarılı! Eklenen Kelimeler:</h3>
+                            <ul class="chalk-list" id="scan-words-list"></ul>
+                            <button class="chalk-btn margin-top" onclick="switchTab('list')">Kelimeleri Listede Gör</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECTION 3: TEST CENTER -->
+                <section id="sec-test" class="tab-content">
+                    <!-- Test Hub Selection -->
+                    <div id="test-selector-screen">
+                        <div class="section-header">
+                            <h2>Test ve Sınav Merkezi</h2>
+                        </div>
+                        <p class="test-intro">Kelimelerinizi pekiştirmek için aşağıdaki test türlerinden birini seçin:</p>
+                        
+                        <div class="test-menu-grid">
+                            <!-- Test 1 -->
+                            <div class="test-menu-card" onclick="startHangman()">
+                                <div class="test-card-icon">💀</div>
+                                <h3>Adam Asmaca</h3>
+                                <p>Karatahtada harf harf çizimlerle kelime tahmin etme oyunu.</p>
+                            </div>
+                            <!-- Test 2 -->
+                            <div class="test-menu-card" onclick="startFillBlanks()">
+                                <div class="test-card-icon">✏️</div>
+                                <h3>Boşluk Doldurma</h3>
+                                <p>Verilen ipucuna göre kelimeyi klavyeden kendiniz yazın.</p>
+                            </div>
+                            <!-- Test 3 -->
+                            <div class="test-menu-card" onclick="startMatching()">
+                                <div class="test-card-icon">🧩</div>
+                                <h3>Kart Eşleştirme</h3>
+                                <p>İngilizce ve Türkçe kelimeleri kartları eşleştirerek yok edin.</p>
+                            </div>
+                            <!-- Test 4 -->
+                            <div class="test-menu-card" onclick="startMultipleChoice()">
+                                <div class="test-card-icon">📚</div>
+                                <h3>5 Şıklı Test</h3>
+                                <p>Klasik çoktan seçmeli 5 şıklı test ile kelime bilgisi ölçümü.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TEST CONTAINER (DYNAMICAL PLAY AREA) -->
+                    <div id="test-play-screen" style="display: none;">
+                        <button class="chalk-btn margin-bottom" onclick="exitTest()">🔙 Test Seçimine Dön</button>
+                        
+                        <!-- Inner Container for Games -->
+                        <div id="game-arena">
+                            <!-- Dynamic game content will load here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECTION 4: ARCHIVE / HISTORY -->
+                <section id="sec-archive" class="tab-content">
+                    <div class="section-header">
+                        <h2>Çalışma Arşivi ve İlerleme</h2>
+                    </div>
+                    <p class="archive-intro">Tarihsel olarak yaptığınız çalışmalar ve test başarı oranlarınız:</p>
+                    
+                    <div class="archive-timeline" id="archive-container">
+                        <!-- History items will be loaded dynamically -->
+                        <div class="chalk-loading">Geçmiş yükleniyor...</div>
+                    </div>
+                </section>
+                
+            </div>
+        </main>
+
+        <!-- Chalkboard Wooden Ledger for chalks & eraser details -->
+        <footer class="wooden-ledger">
+            <div class="chalk-holder">
+                <span class="chalk-item white-chalk"></span>
+                <span class="chalk-item red-chalk"></span>
+                <span class="chalk-item yellow-chalk"></span>
+                <span class="chalk-item blue-chalk"></span>
+            </div>
+            <div class="eraser-item"></div>
+        </footer>
+    </div>
+
+    <!-- MODAL: ADD / EDIT WORD -->
+    <div class="modal-overlay" id="word-modal" style="display: none;">
+        <div class="modal-chalkboard">
+            <button class="modal-close" onclick="closeWordModal()">❌</button>
+            <h3 id="modal-title">Kelime Ekle</h3>
+            <form id="word-form" onsubmit="saveWord(event)">
+                <input type="hidden" id="form-word-id">
+                
+                <div class="form-group">
+                    <label for="form-word">İngilizce Kelime (Kırmızı):</label>
+                    <input type="text" id="form-word" required placeholder="Örn: Abandon">
+                </div>
+                
+                <div class="form-group">
+                    <label for="form-pronunciation">Türkçe Okunuşu (Sarı):</label>
+                    <input type="text" id="form-pronunciation" placeholder="Örn: ıbandın">
+                </div>
+                
+                <div class="form-group">
+                    <label for="form-meaning">Türkçe Anlamı (Beyaz):</label>
+                    <input type="text" id="form-meaning" required placeholder="Örn: Terk etmek">
+                </div>
+                
+                <div class="form-group">
+                    <label for="form-technique">Hafıza Tekniği (Mavi):</label>
+                    <textarea id="form-technique" rows="3" placeholder="Örn: Topa çok abandığın halde kaleci kalesini terk etmedi."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="chalk-btn border-red" onclick="closeWordModal()">Vazgeç</button>
+                    <button type="submit" class="chalk-btn border-green">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: SETTINGS -->
+    <div class="modal-overlay" id="settings-modal" style="display: none;">
+        <div class="modal-chalkboard">
+            <button class="modal-close" onclick="closeSettingsModal()">❌</button>
+            <h3>Uygulama Ayarları</h3>
+            <div class="form-group">
+                <p style="font-size: 0.95rem; color: #ccc; margin-bottom: 12px; line-height: 1.4;">
+                    Vercel ortam değişkeni ayarladıysanız burayı boş bırakabilirsiniz. Mobil cihazınızda doğrudan tarayıcıdan resim taramak isterseniz kendi Gemini API Key değerinizi buraya kaydedebilirsiniz:
+                </p>
+                <label for="settings-api-key">Gemini API Key (Local):</label>
+                <input type="text" id="settings-api-key" placeholder="AIzaSy...">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="chalk-btn border-red" onclick="closeSettingsModal()">Kapat</button>
+                <button type="button" class="chalk-btn border-green" onclick="saveSettings()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: BACKUP -->
+    <div class="modal-overlay" id="backup-modal" style="display: none;">
+        <div class="modal-chalkboard">
+            <button class="modal-close" onclick="closeBackupModal()">❌</button>
+            <h3>Veri Yedekleme & Kurtarma</h3>
+            <p style="font-size: 0.95rem; color: #ccc; margin-bottom: 20px; line-height: 1.4;">
+                Kelimelerinizi ve çalışma geçmişinizi cihazlar arasında (PC - Tablet - Telefon) senkronize etmek için yedek alabilir veya geri yükleyebilirsiniz.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <button class="chalk-btn border-green" onclick="exportBackup()">📥 Verileri Bilgisayara İndir (Yedek Al)</button>
+                
+                <div style="border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 15px;">
+                    <label style="display:block; font-family:'Patrick Hand'; font-size:1.2rem; margin-bottom:8px;">Yedekten Geri Yükle:</label>
+                    <input type="file" id="backup-file-input" accept=".json" onchange="importBackup(event)" style="display:none;">
+                    <button class="chalk-btn" style="width:100%;" onclick="triggerBackupFile()">📂 Yedek Dosyası Seç (.json)</button>
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top:20px;">
+                <button type="button" class="chalk-btn border-red" onclick="closeBackupModal()">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUDIO PLAYER UTILITY -->
+    <div style="display:none;">
+        <audio id="tts-audio"></audio>
+    </div>
+
+</body>
+</html>
