@@ -41,8 +41,8 @@ self.addEventListener('activate', event => {
 
 // Fetch events: Cache-First with Network fallback (for app shells)
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests (e.g. POST /api/upload)
-  if (event.request.method !== 'GET') {
+  // Skip non-GET requests or API requests (e.g. POST /api/upload, GET /api/words)
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
     return;
   }
 

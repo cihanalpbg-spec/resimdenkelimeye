@@ -72,9 +72,9 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
     }
   };
 
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
   let geminiResponseText = '';
-  let apiError = null;
+  let errors = [];
 
   for (const model of models) {
     try {
@@ -96,12 +96,12 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
       }
     } catch (err) {
       console.warn(`Model ${model} failed:`, err.message);
-      apiError = err;
+      errors.push(`${model}: ${err.message}`);
     }
   }
 
   if (!geminiResponseText) {
-    return res.status(500).json({ error: `Gemini API Hatası: ${apiError ? apiError.message : 'Yanıt alınamadı.'}` });
+    return res.status(500).json({ error: `Gemini API Hatası: Tüm modeller başarısız oldu. [${errors.join(' | ')}]` });
   }
 
   try {

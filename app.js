@@ -9,6 +9,7 @@ let currentPage = 1;
 const wordsPerPage = 20;
 
 let currentLang = ''; // 'english', 'german', 'russian', 'japanese', 'french', 'spanish'
+const isServerMode = window.location.protocol.startsWith('http');
 
 const LANG_CONFIG = {
     english: {
@@ -156,42 +157,146 @@ function switchTab(tabId) {
 // ----------------------------------------------------
 // LOCAL PERSISTENT STORAGE
 // ----------------------------------------------------
-function fetchWords() {
+async function syncWords() {
     if (!currentLang) return;
+    
+    // 1. Load local cache
+    let localWords = [];
     try {
         const localData = localStorage.getItem(`resimden_ingilizceye_words_${currentLang}`);
-        allWords = localData ? JSON.parse(localData) : [];
-        
-        // Sort words alphabetically by vocabulary word
+        localWords = localData ? JSON.parse(localData) : [];
+    } catch (e) {
+        console.error(e);
+    }
+
+    if (!isServerMode) {
+        allWords = localWords;
         allWords.sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }));
-        
         activeFilteredWords = [...allWords];
         renderWords(activeFilteredWords);
-    } catch (error) {
-        console.error("Kelime listesi yüklenirken hata oluştu:", error);
-        document.getElementById('words-container').innerHTML = 
-            `<div class="chalk-loading">Yükleme hatası: Veriler okunamadı.</div>`;
+        return;
     }
+
+    try {
+        // 2. Fetch server words
+        const response = await fetch(`/api/words?lang=${currentLang}`);
+        if (!response.ok) throw new Error('Failed to fetch words from server');
+        const serverWords = await response.json();
+        
+        // 3. Identify local words not on the server (migration / offline additions)
+        const unsynced = [];
+        localWords.forEach(localW => {
+            const exists = serverWords.some(serverW => serverW.word.toLowerCase() === localW.word.toLowerCase());
+            if (!exists) {
+                unsynced.push(localW);
+            }
+        });
+        
+        let finalWords = serverWords;
+        
+        // 4. Upload unsynced words if any
+        if (unsynced.length > 0) {
+            console.log(`Uploading ${unsynced.length} unsynced words to server...`);
+            const syncRes = await fetch(`/api/words/bulk?lang=${currentLang}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ words: unsynced })
+            });
+            if (syncRes.ok) {
+                const syncData = await syncRes.json();
+                finalWords = syncData.words; // Server returns complete merged list
+            }
+        }
+        
+        allWords = finalWords || [];
+        allWords.sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }));
+        
+        // 5. Update local cache
+        localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
+        activeFilteredWords = [...allWords];
+        renderWords(activeFilteredWords);
+    } catch (err) {
+        console.warn("Sync words failed, using local storage cache:", err);
+        allWords = localWords;
+        allWords.sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }));
+        activeFilteredWords = [...allWords];
+        renderWords(activeFilteredWords);
+    }
+}
+
+async function syncHistory() {
+    if (!currentLang) return;
+    
+    // 1. Load local cache
+    let localHistory = [];
+    try {
+        const localData = localStorage.getItem(`resimden_ingilizceye_history_${currentLang}`);
+        localHistory = localData ? JSON.parse(localData) : [];
+    } catch (e) {
+        console.error(e);
+    }
+
+    if (!isServerMode) {
+        historyRecords = localHistory;
+        historyRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        renderHistory(historyRecords);
+        return;
+    }
+
+    try {
+        // 2. Fetch server history
+        const response = await fetch(`/api/history?lang=${currentLang}`);
+        if (!response.ok) throw new Error('Failed to fetch history from server');
+        const serverHistory = await response.json();
+        
+        // 3. Identify local history records not on the server
+        const unsynced = [];
+        localHistory.forEach(localH => {
+            const exists = serverHistory.some(serverH => serverH.id === localH.id || serverH.date === localH.date);
+            if (!exists) {
+                unsynced.push(localH);
+            }
+        });
+        
+        let finalHistory = serverHistory;
+        
+        // 4. Upload unsynced history records if any
+        if (unsynced.length > 0) {
+            console.log(`Uploading ${unsynced.length} unsynced history records to server...`);
+            const syncRes = await fetch(`/api/history/bulk?lang=${currentLang}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: unsynced })
+            });
+            if (syncRes.ok) {
+                const syncData = await syncRes.json();
+                finalHistory = syncData.history; // Server returns complete merged list
+            }
+        }
+        
+        historyRecords = finalHistory || [];
+        historyRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // 5. Update local cache
+        localStorage.setItem(`resimden_ingilizceye_history_${currentLang}`, JSON.stringify(historyRecords));
+        renderHistory(historyRecords);
+    } catch (err) {
+        console.warn("Sync history failed, using local storage cache:", err);
+        historyRecords = localHistory;
+        historyRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        renderHistory(historyRecords);
+    }
+}
+
+function fetchWords() {
+    syncWords();
 }
 
 function fetchHistory() {
-    if (!currentLang) return;
-    try {
-        const localData = localStorage.getItem(`resimden_ingilizceye_history_${currentLang}`);
-        historyRecords = localData ? JSON.parse(localData) : [];
-        
-        // Sort history by date descending (newest first)
-        historyRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        renderHistory(historyRecords);
-    } catch (error) {
-        console.error("Çalışma geçmişi yüklenirken hata oluştu:", error);
-        document.getElementById('archive-container').innerHTML = 
-            `<div class="chalk-loading">Geçmiş yükleme hatası.</div>`;
-    }
+    syncHistory();
 }
 
-function saveWord(event) {
+async function saveWord(event) {
     event.preventDefault();
     if (!currentLang) return;
     
@@ -206,22 +311,50 @@ function saveWord(event) {
         return;
     }
 
+    const wordData = { word, pronunciation, meaning, technique };
+
+    if (isServerMode) {
+        try {
+            let response;
+            if (id) {
+                // Edit Mode
+                response = await fetch(`/api/words/${id}?lang=${currentLang}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(wordData)
+                });
+            } else {
+                // Add Mode
+                response = await fetch(`/api/words?lang=${currentLang}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(wordData)
+                });
+            }
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Sunucu kaydetme hatası');
+            }
+            closeWordModal();
+            syncWords();
+            return;
+        } catch (err) {
+            console.error("Server save failed, falling back to local storage:", err);
+            alert('Sunucuya kaydedilemedi, yerel olarak kaydediliyor: ' + err.message);
+        }
+    }
+
+    // Local Storage Fallback
     if (id) {
-        // Edit Mode
         const index = allWords.findIndex(w => w.id === id);
         if (index > -1) {
             allWords[index] = {
                 ...allWords[index],
-                word,
-                pronunciation,
-                meaning,
-                technique,
+                ...wordData,
                 updatedAt: new Date().toISOString()
             };
         }
     } else {
-        // Add Mode
-        // Avoid duplicate English words (case-insensitive check)
         const exists = allWords.find(w => w.word.toLowerCase() === word.toLowerCase());
         if (exists) {
             alert('Bu kelime zaten listenizde mevcut!');
@@ -230,42 +363,76 @@ function saveWord(event) {
 
         const newWord = {
             id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
-            word,
-            pronunciation,
-            meaning,
-            technique,
+            ...wordData,
             createdAt: new Date().toISOString()
         };
         allWords.push(newWord);
     }
 
-    // Save to localStorage
     localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
     closeWordModal();
     fetchWords();
 }
 
-function deleteWord(id) {
+async function deleteWord(id) {
     if (!currentLang) return;
     if (!confirm('Bu kelimeyi silmek istediğinize emin misiniz?')) return;
     
+    if (isServerMode) {
+        try {
+            const response = await fetch(`/api/words/${id}?lang=${currentLang}`, {
+                method: 'DELETE'
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Sunucu silme hatası');
+            }
+            syncWords();
+            return;
+        } catch (err) {
+            console.error("Server delete failed, falling back to local storage:", err);
+            alert('Sunucudan silinemedi, yerel olarak siliniyor: ' + err.message);
+        }
+    }
+
+    // Local Storage Fallback
     allWords = allWords.filter(w => w.id !== id);
     localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
     fetchWords();
 }
 
-function logStudySession(testName, score, wordsStudied) {
+async function logStudySession(testName, score, wordsStudied) {
     if (!currentLang) return;
+    
+    const record = {
+        id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
+        date: new Date().toISOString(),
+        testName,
+        score: score || 'N/A',
+        wordsStudied: wordsStudied || []
+    };
+
+    if (isServerMode) {
+        try {
+            const response = await fetch(`/api/history?lang=${currentLang}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(record)
+            });
+            if (response.ok) {
+                syncHistory();
+                return;
+            }
+        } catch (err) {
+            console.error("Failed to save history to server, falling back to local storage:", err);
+        }
+    }
+
+    // Local Storage Fallback
     try {
-        const record = {
-            id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
-            date: new Date().toISOString(),
-            testName,
-            score: score || 'N/A',
-            wordsStudied: wordsStudied || []
-        };
         historyRecords.push(record);
         localStorage.setItem(`resimden_ingilizceye_history_${currentLang}`, JSON.stringify(historyRecords));
+        renderHistory(historyRecords);
     } catch (error) {
         console.error('Çalışma geçmişi kaydedilemedi:', error);
     }
@@ -324,7 +491,7 @@ function importBackup(event) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const imported = JSON.parse(e.target.result);
             if (!imported.words) {
@@ -338,6 +505,23 @@ function importBackup(event) {
                 localStorage.setItem(`resimden_ingilizceye_words_${currentLang}`, JSON.stringify(allWords));
                 localStorage.setItem(`resimden_ingilizceye_history_${currentLang}`, JSON.stringify(historyRecords));
                 
+                if (isServerMode) {
+                    try {
+                        await fetch(`/api/words/reset?lang=${currentLang}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ words: allWords })
+                        });
+                        await fetch(`/api/history/reset?lang=${currentLang}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ history: historyRecords })
+                        });
+                    } catch (err) {
+                        console.error("Failed to reset server database during backup restore:", err);
+                    }
+                }
+
                 alert('Yedekten yükleme başarıyla tamamlandı!');
                 closeBackupModal();
                 fetchWords();
@@ -412,9 +596,19 @@ function renderWords(words) {
     if (totalPages <= 1) {
         paginationContainer.innerHTML = '';
     } else {
+        let options = '';
+        for (let i = 1; i <= totalPages; i++) {
+            options += `<option value="${i}" ${i === currentPage ? 'selected' : ''}>${i}</option>`;
+        }
         paginationContainer.innerHTML = `
             <button class="chalk-btn" ${currentPage === 1 ? 'disabled style="opacity:0.3; pointer-events:none;"' : ''} onclick="changePage(-1)">&lt;</button>
-            <span class="page-info">Sayfa ${currentPage} / ${totalPages}</span>
+            <span class="page-info">
+                Sayfa 
+                <select class="chalk-select" onchange="goToPage(parseInt(this.value))">
+                    ${options}
+                </select>
+                / ${totalPages}
+            </span>
             <button class="chalk-btn" ${currentPage === totalPages ? 'disabled style="opacity:0.3; pointer-events:none;"' : ''} onclick="changePage(1)">&gt;</button>
         `;
     }
@@ -425,6 +619,16 @@ function changePage(direction) {
     renderWords(activeFilteredWords);
     // Scroll chalkboard to top
     document.getElementById('main-chalkboard').scrollTop = 0;
+}
+
+function goToPage(pageNumber) {
+    const totalPages = Math.ceil(activeFilteredWords.length / wordsPerPage);
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+        currentPage = pageNumber;
+        renderWords(activeFilteredWords);
+        // Scroll chalkboard to top
+        document.getElementById('main-chalkboard').scrollTop = 0;
+    }
 }
 
 function toggleViewMode() {
@@ -657,9 +861,9 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
             };
 
             // Call models
-            const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+            const models = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
             let geminiResponseText = '';
-            let apiError = null;
+            let errors = [];
 
             for (const model of models) {
               try {
@@ -687,12 +891,12 @@ Do NOT wrap the JSON output in markdown formatting blocks like \`\`\`json. Retur
                   break;
                 }
               } catch (err) {
-                apiError = err;
+                errors.push(`${model}: ${err.message}`);
               }
             }
 
             if (!geminiResponseText) {
-                throw new Error(apiError ? apiError.message : 'Gemini API yanitsiz kaldi.');
+                throw new Error("Tüm modeller başarısız oldu: " + errors.join(' | '));
             }
 
             extractedWords = JSON.parse(geminiResponseText.trim());

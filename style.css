@@ -430,6 +430,37 @@ p {
 
 .page-info {
     text-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chalk-select {
+    background: transparent;
+    border: none;
+    border-bottom: 2px dashed rgba(255, 255, 255, 0.7);
+    color: var(--white-chalk);
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.5rem;
+    cursor: pointer;
+    outline: none;
+    padding: 0 6px;
+    text-align: center;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.chalk-select:focus {
+    border-bottom-style: solid;
+    border-bottom-color: var(--white-chalk);
+}
+
+.chalk-select option {
+    background-color: var(--chalkboard-bg);
+    color: var(--white-chalk);
+    font-family: sans-serif;
+    font-size: 1.1rem;
 }
 
 .word-card {
